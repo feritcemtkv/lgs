@@ -433,7 +433,6 @@
     <div class="card">
       <div class="eyebrow">Son Giriş</div>
       <p id="detail-last-entry" class="mono" style="font-size:16px; margin:0;"></p>
-      <button type="button" class="btn btn-primary" id="btn-export-student">Excel Raporu İndir</button>
     </div>
 
     <div class="card">
@@ -486,6 +485,19 @@
     </div>
 
     <div class="card">
+      <h3>Günlük Hedef</h3>
+      <input type="number" id="detail-target" min="0" step="1">
+      <div class="error-text" id="detail-target-error"></div>
+      <button type="button" class="btn btn-primary" id="btn-save-target">Kaydet</button>
+    </div>
+
+    <div class="card">
+      <h3>Excel Olarak İndir</h3>
+      <p class="hint-text" style="margin-top:-8px;">Özet, grafikler, derslere göre dağılım, günlük sorular ve denemeleri içeren tam rapor.</p>
+      <button type="button" class="btn btn-primary" id="btn-export-student">Excel Raporu İndir</button>
+    </div>
+
+    <div class="card">
       <h3>Giriş Bilgileri</h3>
       <label for="detail-username">Kullanıcı Adı</label>
       <input type="text" id="detail-username">
@@ -493,13 +505,6 @@
       <input type="text" id="detail-password">
       <div class="error-text" id="detail-credentials-error"></div>
       <button type="button" class="btn btn-primary" id="btn-save-credentials">Kaydet</button>
-    </div>
-
-    <div class="card">
-      <h3>Günlük Hedef</h3>
-      <input type="number" id="detail-target" min="0" step="1">
-      <div class="error-text" id="detail-target-error"></div>
-      <button type="button" class="btn btn-primary" id="btn-save-target">Kaydet</button>
     </div>
 
     <div class="card">
@@ -853,8 +858,37 @@
     try {
       await ensureSheetJS();
       const wb = XLSX.utils.book_new();
-      const { groups } = buildDateGroupedActivity();
+      const students = activityData.students || [];
 
+      const studentsRows = students.map(s => ({
+        'Ad Soyad': s.name, 'Kullanıcı Adı': s.username, 'Şifre': s.password,
+        'Günlük Hedef': s.daily_target != null ? s.daily_target : '',
+        'Son Giriş': s.last_entry_date || '(hiç girmedi)',
+        'Eklenme Tarihi': s.created_at ? s.created_at.slice(0,10) : '',
+        'Haftaya Dair Plan ve Öneriler': s.weekly_plan && s.weekly_plan.trim() ? s.weekly_plan : '-',
+        'Rehberlik Görüş ve Öneriler': s.guidance_note && s.guidance_note.trim() ? s.guidance_note : '-'
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(studentsRows), 'Öğrenciler');
+
+      const entryRows = [];
+      students.forEach(s => {
+        (s.entries || []).forEach(e => {
+          Object.entries(e.subjects || {}).forEach(([subj, count]) => {
+            entryRows.push({ 'Öğrenci': s.name, 'Tarih': e.date, 'Ders': subj, 'Soru Sayısı': count });
+          });
+        });
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(entryRows), 'Günlük Sorular');
+
+      const denemeRows = [];
+      students.forEach(s => {
+        (s.denemeler || []).forEach(d => {
+          denemeRows.push({ 'Öğrenci': s.name, 'Deneme': d.name, 'Tarih': d.date, 'Puan': d.score });
+        });
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(denemeRows), 'Denemeler');
+
+      const { groups } = buildDateGroupedActivity();
       const aoa = [];
       groups.forEach(g => {
         aoa.push([fmtDate(g.date)]);
@@ -864,7 +898,7 @@
         });
         aoa.push([]);
       });
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Günlük Aktivite');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Günlük Aktivite (Gün Gün)');
 
       const loginRows = (activityData.logins || []).map(l => ({ 'Giriş Zamanı': fmtDateTime(l) }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(loginRows), 'Giriş Geçmişi');
@@ -1024,7 +1058,9 @@
         'Ad Soyad': s.name, 'Kullanıcı Adı': s.username, 'Şifre': s.password,
         'Günlük Hedef': s.daily_target != null ? s.daily_target : '',
         'Son Giriş': s.last_entry_date || '(hiç girmedi)',
-        'Eklenme Tarihi': s.created_at ? s.created_at.slice(0,10) : ''
+        'Eklenme Tarihi': s.created_at ? s.created_at.slice(0,10) : '',
+        'Haftaya Dair Plan ve Öneriler': s.weekly_plan && s.weekly_plan.trim() ? s.weekly_plan : '-',
+        'Rehberlik Görüş ve Öneriler': s.guidance_note && s.guidance_note.trim() ? s.guidance_note : '-'
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(studentsRows), 'Öğrenciler');
 
@@ -1195,9 +1231,12 @@
         { k: rangeLabel(lwStart, lwEnd), v: sumEntries(entries, d => inRange(d, lwStart, lwEnd)) },
         { k: monthLabel(monthStart), v: sumEntries(entries, d => inRange(d, monthStart, monthEnd)) },
         { k: monthLabel(lastMonthStart), v: sumEntries(entries, d => inRange(d, lastMonthStart, lastMonthEnd)) },
-        { k: 'Tüm Zamanlar', v: entries.reduce((sum,e) => sum + entryTotal(e), 0) }
+        { k: 'Tüm Zamanlar', v: entries.reduce((sum,e) => sum + entryTotal(e), 0) },
+        { k: 'Haftaya Dair Plan ve Öneriler', v: currentStudent.weekly_plan && currentStudent.weekly_plan.trim() ? currentStudent.weekly_plan : '-' },
+        { k: 'Rehberlik Görüş ve Öneriler', v: currentStudent.guidance_note && currentStudent.guidance_note.trim() ? currentStudent.guidance_note : '-' }
       ]);
       wsSummary.getRow(1).font = { bold: true };
+      wsSummary.getColumn('v').alignment = { wrapText: true, vertical: 'top' };
 
       const wsCharts = wb.addWorksheet('Grafikler');
       let rowCursor = 1;
@@ -1214,7 +1253,7 @@
 
       const wsSubjects = wb.addWorksheet('Derslere Göre');
       wsSubjects.columns = [
-        { header: 'Ders', key: 'subj', width: 24 }, { header: 'Bu Hafta', key: 'week', width: 12 },
+        { header: 'Ders', key: 'subj', width: 24 }, { header: rangeLabel(wStart, wEnd), key: 'week', width: 22 },
         { header: 'Toplam', key: 'total', width: 12 }, { header: 'Yüzde', key: 'pct', width: 10 }
       ];
       wsSubjects.getRow(1).font = { bold: true };
