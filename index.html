@@ -1024,7 +1024,9 @@
         'Ad Soyad': s.name, 'Kullanıcı Adı': s.username, 'Şifre': s.password,
         'Günlük Hedef': s.daily_target != null ? s.daily_target : '',
         'Son Giriş': s.last_entry_date || '(hiç girmedi)',
-        'Eklenme Tarihi': s.created_at ? s.created_at.slice(0,10) : ''
+        'Eklenme Tarihi': s.created_at ? s.created_at.slice(0,10) : '',
+        'Haftaya Dair Plan ve Öneriler': s.weekly_plan && s.weekly_plan.trim() ? s.weekly_plan : '-',
+        'Rehberlik Görüş ve Öneriler': s.guidance_note && s.guidance_note.trim() ? s.guidance_note : '-'
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(studentsRows), 'Öğrenciler');
 
@@ -1195,9 +1197,12 @@
         { k: rangeLabel(lwStart, lwEnd), v: sumEntries(entries, d => inRange(d, lwStart, lwEnd)) },
         { k: monthLabel(monthStart), v: sumEntries(entries, d => inRange(d, monthStart, monthEnd)) },
         { k: monthLabel(lastMonthStart), v: sumEntries(entries, d => inRange(d, lastMonthStart, lastMonthEnd)) },
-        { k: 'Tüm Zamanlar', v: entries.reduce((sum,e) => sum + entryTotal(e), 0) }
+        { k: 'Tüm Zamanlar', v: entries.reduce((sum,e) => sum + entryTotal(e), 0) },
+        { k: 'Haftaya Dair Plan ve Öneriler', v: currentStudent.weekly_plan && currentStudent.weekly_plan.trim() ? currentStudent.weekly_plan : '-' },
+        { k: 'Rehberlik Görüş ve Öneriler', v: currentStudent.guidance_note && currentStudent.guidance_note.trim() ? currentStudent.guidance_note : '-' }
       ]);
       wsSummary.getRow(1).font = { bold: true };
+      wsSummary.getColumn('v').alignment = { wrapText: true, vertical: 'top' };
 
       const wsCharts = wb.addWorksheet('Grafikler');
       let rowCursor = 1;
@@ -1214,7 +1219,7 @@
 
       const wsSubjects = wb.addWorksheet('Derslere Göre');
       wsSubjects.columns = [
-        { header: 'Ders', key: 'subj', width: 24 }, { header: 'Bu Hafta', key: 'week', width: 12 },
+        { header: 'Ders', key: 'subj', width: 24 }, { header: rangeLabel(wStart, wEnd), key: 'week', width: 22 },
         { header: 'Toplam', key: 'total', width: 12 }, { header: 'Yüzde', key: 'pct', width: 10 }
       ];
       wsSubjects.getRow(1).font = { bold: true };
